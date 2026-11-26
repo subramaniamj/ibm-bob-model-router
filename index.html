@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stop Picking Models</title>
+<meta name="description" content="What IBM Bob is, and how its model router decides which AI model handles each task, so your developers don't have to.">
+<meta name="author" content="Subbu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Stop picking models">
+<meta property="og:description" content="What IBM Bob is, and how its model router decides which AI model handles each task.">
+<meta property="og:url" content="https://subramaniamj.github.io/ibm-bob-model-router/">
+<meta property="og:image" content="https://subramaniamj.github.io/ibm-bob-model-router/assets/img/social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://subramaniamj.github.io/ibm-bob-model-router/">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230f62fe'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='16' r='3'/%3E%3Cpath d='M11 16h4c3 0 4-7 8-7M15 16c3 0 4 7 8 7'/%3E%3C/g%3E%3Cg fill='%23fff'%3E%3Ccircle cx='25' cy='9' r='2.6'/%3E%3Ccircle cx='25' cy='23' r='2.6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="assets/css/article.css">
+<style>
+  .d-tier { fill: var(--bg); stroke-width: 2; }
+  .d-tier--on { fill: var(--blue-bg); }
+  .s-teal { stroke: var(--teal); } .s-blue { stroke: var(--blue); } .s-purple { stroke: var(--purple); }
+  .d-coin { fill: none; stroke: var(--text-2); stroke-width: 1.5; }
+  .d-coin.on { fill: var(--text-2); }
+  .d-pick { fill: var(--blue); stroke: var(--blue); stroke-width: 1.5; }
+  .d-blue-strong { stroke: var(--blue); stroke-width: 2.5; fill: none; }
+</style>
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem("acp-theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<!-- Icon set (line icons drawn for this article) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-network" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="3.5"/><circle cx="7" cy="7" r="2.5"/><circle cx="25" cy="7" r="2.5"/><circle cx="7" cy="25" r="2.5"/><circle cx="25" cy="25" r="2.5"/><path d="M9 9l4.5 4.5M23 9l-4.5 4.5M9 23l4.5-4.5M23 23l-4.5-4.5"/></symbol>
+    <symbol id="i-route" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="16" r="3"/><circle cx="25.5" cy="7.5" r="3"/><circle cx="25.5" cy="24.5" r="3"/><path d="M9.5 16H14c3.5 0 4-8.5 8.5-8.5M14 16c3.5 0 4 8.5 8.5 8.5"/></symbol>
+    <symbol id="i-agents" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="7" r="3.5"/><circle cx="7" cy="25" r="3.5"/><circle cx="25" cy="25" r="3.5"/><path d="M14.3 10.2L8.7 21.8M17.7 10.2l5.6 11.6M10.5 25h11"/></symbol>
+    <symbol id="i-literate" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14M4 13h10M4 18h14"/><path d="M21 15l-3.5 4.5L21 24M25 15l3.5 4.5L25 24"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="26" height="22"/><path d="M8 12l4 4-4 4M15 20h8"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l10 4v8c0 7-5 12-10 14C11 27 6 22 6 15V7z"/><path d="M11.5 16l3.5 3.5 6-7"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 28h26"/><rect x="6" y="17" width="5" height="11"/><rect x="13.5" y="10" width="5" height="18"/><rect x="21" y="4" width="5" height="24"/></symbol>
+    <symbol id="i-package" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M16 3l12 6v14l-12 6-12-6V9z"/><path d="M4 9l12 6 12-6M16 15v14"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4h12v7a6 6 0 0 1-12 0z"/><path d="M10 7H5v1.5A4.5 4.5 0 0 0 10 13M22 7h5v1.5A4.5 4.5 0 0 1 22 13M16 17v6M11 28h10M12.5 23h7v5h-7z"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><ellipse cx="16" cy="8" rx="10" ry="4"/><path d="M6 8v6c0 2.2 4.5 4 10 4s10-1.8 10-4V8M6 14v7c0 2.2 4.5 4 10 4s10-1.8 10-4v-7"/></symbol>
+    <symbol id="i-cycle" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M25.5 13A10 10 0 0 0 7.5 10"/><path d="M7 4.5V10h5.5"/><path d="M6.5 19a10 10 0 0 0 18 3"/><path d="M25 27.5V22h-5.5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 3L7 18h8l-2 11 12-16h-8z"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 23a12 12 0 0 1 24 0"/><path d="M16 23l6-7"/><circle cx="16" cy="23" r="2"/></symbol>
+    <symbol id="i-diamond" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 5h14l5 7-12 15L4 12z"/><path d="M4 12h24M12.5 5L9.5 12 16 27l6.5-15-3-7"/></symbol>
+    <symbol id="i-message" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 6h24v16H13l-6 5v-5H4z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="16" cy="16" r="5.5"/><path d="M16 2.5v3.5M16 26v3.5M2.5 16H6M26 16h3.5M6.5 6.5l2.5 2.5M23 23l2.5 2.5M6.5 25.5L9 23M23 9l2.5-2.5"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 4.5A11.5 11.5 0 1 0 27.5 19 9.5 9.5 0 0 1 13 4.5z"/></symbol>
+  </defs>
+</svg>
+
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <div class="masthead__brand">
+      <svg class="mark" aria-hidden="true"><use href="#i-network"/></svg>
+      <strong>Subbu</strong><span>Senior technical pre-sales<span class="hide-sm"> · Asia Pacific</span></span>
+    </div>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch to dark theme">
+      <svg class="i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+      <svg class="i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+
+  <header class="hero wrap">
+    <p class="eyebrow">Writing code with AI is easy. Choosing the model isn't.</p>
+    <h1>Stop picking models</h1>
+    <p class="dek">What IBM Bob is, and how it decides which AI model handles each task, so your developers don't have to.</p>
+    <div class="byline">
+      <span class="avatar" aria-hidden="true">S</span>
+      <div><strong>Subbu</strong>November 2026 · 4 min read</div>
+    </div>
+  </header>
+
+  <section class="wrap prose">
+    <p class="lead">A new model tops the leaderboard every few weeks.</p>
+    <p>Teams argue about it in chat. Someone runs a quick comparison. A favourite gets pinned, and from then on the same model renames a variable and redesigns a payment service.</p>
+    <p>That's two problems at once. You overpay for the small jobs, and you may be underpowered for the big ones.</p>
+  </section>
+
+  <section class="thesis" aria-label="The core idea">
+    <div class="wrap">
+      <div class="rule" aria-hidden="true"></div>
+      <blockquote>
+        <p class="not">The question isn't which model is best.</p>
+        <p class="but">It's which model is best <b>for this task</b>, at <b>this cost</b>, <b>right now</b>.</p>
+      </blockquote>
+    </div>
+  </section>
+
+  <section class="wrap prose">
+    <span class="kicker">01 · The partner</span>
+    <h2>First, what is IBM Bob?</h2>
+    <p>IBM Bob is an AI development partner. That's a deliberate step up from a coding assistant.</p>
+    <p>An assistant sits in your editor and finishes the line you're typing. Bob works across the whole software lifecycle. It explores a codebase, plans changes, writes and tests code, and documents what it did, using focused agents that each have their own context, tools and skills.</p>
+    <p>You stay in charge. Bob asks for approval before it changes your code, unless you've told it a type of task can go ahead on its own.</p>
+  </section>
+
+  <figure class="figure wide" id="fig-bob">
+    <div class="figure__card">
+      <p class="figure__label">Figure 1</p>
+      <p class="figure__title">What's inside IBM Bob</p>
+      <p class="lifecycle-label">ACROSS THE LIFECYCLE</p>
+      <ol class="lifecycle">
+        <li><span>Discover</span></li>
+        <li><span>Plan</span></li>
+        <li><span>Design</span></li>
+        <li><span>Code</span></li>
+        <li><span>Test</span></li>
+        <li><span>Deploy</span></li>
+        <li><span>Operate</span></li>
+      </ol>
+      <div class="caps">
+        <div class="cap"><svg aria-hidden="true"><use href="#i-agents"/></svg><h3>Agents and skills</h3><p>Focused agents and subagents, each with its own context, tools and skills.</p></div>
+        <div class="cap"><svg aria-hidden="true"><use href="#i-literate"/></svg><h3>Literate coding</h3><p>Describe what you want in plain language. Bob writes it in the context of your code.</p></div>
+        <div class="cap"><svg aria-hidden="true"><use href="#i-terminal"/></svg><h3>Bob Shell</h3><p>The same partner on the command line, in scripts and in CI/CD pipelines.</p></div>
+        <div class="cap"><svg aria-hidden="true"><use href="#i-shield"/></svg><h3>Security in the flow</h3><p>Sensitive data scanning and real-time policy checks happen while Bob works, not after.</p></div>
+        <div class="cap"><svg aria-hidden="true"><use href="#i-chart"/></svg><h3>Bobalytics</h3><p>Shows what Bob contributed across delivery, how it's being adopted and what it costs.</p></div>
+        <div class="cap"><svg aria-hidden="true"><use href="#i-package"/></svg><h3>Premium Packages</h3><p>Modes, skills and workflows for modernising IBM Z, IBM i and Java.</p></div>
+      </div>
+      <div class="engine"><svg aria-hidden="true"><use href="#i-route"/></svg><div><strong>Underneath it all: the model router.</strong> It picks the model for every task, which is why Bob never asks you to.</div></div>
+    </div>
+  </figure>
+
+  <section class="wrap prose">
+    <span class="kicker">02 · The problem</span>
+    <h2>Why picking a model is the wrong job</h2>
+  </section>
+
+  <figure class="figure wide" id="fig-problem">
+    <div class="figure__card">
+      <p class="figure__label">Figure 2 · Three reasons</p>
+      <div class="trio">
+        <div class="trio__item">
+          <span class="trio__num">01</span>
+          <svg aria-hidden="true"><use href="#i-trophy"/></svg>
+          <h3>Leaderboards aren't your code</h3>
+          <p>Benchmarks test set problems. Your work is your codebase, with its own history and habits.</p>
+        </div>
+        <div class="trio__item">
+          <span class="trio__num">02</span>
+          <svg aria-hidden="true"><use href="#i-coins"/></svg>
+          <h3>One size overpays</h3>
+          <p>Your strongest model on every rename burns money. A cheap one on every design decision costs quality.</p>
+        </div>
+        <div class="trio__item">
+          <span class="trio__num">03</span>
+          <svg aria-hidden="true"><use href="#i-cycle"/></svg>
+          <h3>Models move faster than teams</h3>
+          <p>By the time you've compared this month's models, next month's have arrived.</p>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <section class="wrap prose">
+    <span class="kicker">03 · How it works</span>
+    <h2>How the router decides</h2>
+    <p>Think of triage in a hospital. One assessment at the door decides who sees you. After that, you stay with the same doctor, because they already know your case.</p>
+    <p>IBM Bob's router works the same way. It looks at the <em>first request</em> of a task and matches the work to a model in one of three tiers. The tier decides how many Bobcoins the task costs.</p>
+    <p>Bobcoins are Bob's standard currency. They absorb the swings in token prices and model capabilities, so you don't have to track them.</p>
+  </section>
+
+  <figure class="figure wide" id="fig-tiers">
+    <div class="figure__card">
+      <p class="figure__label">Figure 3</p>
+      <p class="figure__title">Three tiers of models</p>
+      <div class="tiers">
+        <div class="tier tier--fast">
+          <svg aria-hidden="true"><use href="#i-bolt"/></svg>
+          <h3>Fast</h3>
+          <p>Routine, well-scoped work where speed and cost matter most.</p>
+          <div class="coins" aria-label="Lowest Bobcoin cost"><i class="coin on"></i><i class="coin"></i><i class="coin"></i><span>BOBCOINS</span></div>
+        </div>
+        <div class="tier">
+          <svg aria-hidden="true"><use href="#i-gauge"/></svg>
+          <h3>Premium</h3>
+          <p>Everyday engineering that needs stronger reasoning.</p>
+          <div class="coins" aria-label="Middle Bobcoin cost"><i class="coin on"></i><i class="coin on"></i><i class="coin"></i><span>BOBCOINS</span></div>
+        </div>
+        <div class="tier tier--ultra">
+          <svg aria-hidden="true"><use href="#i-diamond"/></svg>
+          <h3>Ultra</h3>
+          <p>The hardest problems.</p>
+          <div class="coins" aria-label="Highest Bobcoin cost"><i class="coin on"></i><i class="coin on"></i><i class="coin on"></i><span>BOBCOINS</span></div>
+        </div>
+      </div>
+    </div>
+    <figcaption>Filled circles show relative cost only.</figcaption>
+  </figure>
+
+  <figure class="figure wide" id="fig-path">
+    <div class="figure__card">
+      <p class="figure__label">Figure 4</p>
+      <p class="figure__title">One task's path through the router</p>
+      <div class="router-scroll">
+        <svg viewBox="0 0 1040 360" role="img" aria-labelledby="path-t path-d">
+          <title id="path-t">One task's path through the router</title>
+          <desc id="path-d">The first request of a task goes to a classifier trained on real Bob usage, then to a routing table that weighs quality, speed and cost. The task is assigned to a model in the Fast, Premium or Ultra tier, and stays on that model for the rest of the task.</desc>
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-arrow" d="M0 0L10 5L0 10z"/></marker>
+            <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="d-arrow-b" d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="d-proto" x="20" y="126">1 · ASK</text>
+          <rect class="d-node-n" x="20" y="150" width="150" height="72"/>
+          <use class="d-ico-n" href="#i-message" x="32" y="174" width="24" height="24"/>
+          <text class="d-t14" x="64" y="183" font-weight="600">First request</text>
+          <text class="d-t13 d-t2" x="64" y="202">of a task</text>
+          <line class="d-line" x1="170" y1="186" x2="218" y2="186" marker-end="url(#ah)"/>
+
+          <text class="d-proto" x="220" y="126">2 · CLASSIFY</text>
+          <rect class="d-box" x="220" y="140" width="190" height="92"/>
+          <text class="d-t" x="315" y="174" text-anchor="middle" font-weight="600">Classifier</text>
+          <text class="d-t13 d-t2" x="315" y="198" text-anchor="middle">trained on real-world</text>
+          <text class="d-t13 d-t2" x="315" y="216" text-anchor="middle">Bob usage</text>
+          <line class="d-line" x1="410" y1="186" x2="458" y2="186" marker-end="url(#ah)"/>
+
+          <text class="d-proto" x="460" y="126">3 · ROUTE</text>
+          <rect class="d-gw" x="460" y="140" width="190" height="92"/>
+          <text class="d-t" x="555" y="174" text-anchor="middle" font-weight="600">Routing table</text>
+          <text class="d-t13 d-t2" x="555" y="198" text-anchor="middle">best quality for</text>
+          <text class="d-t13 d-t2" x="555" y="216" text-anchor="middle">the cost and speed</text>
+
+          <path class="d-faint" d="M650 186C686 186 686 80 720 80"/>
+          <path class="d-faint" d="M650 186C686 186 686 292 720 292"/>
+          <line class="d-blue-strong" x1="650" y1="186" x2="718" y2="186" marker-end="url(#ahb)"/>
+
+          <text class="d-proto" x="722" y="34">4 · ASSIGN</text>
+          <rect class="d-tier s-teal" x="722" y="52" width="150" height="56"/>
+          <text class="d-t" x="740" y="86">Fast</text>
+          <circle class="d-coin on" cx="822" cy="80" r="5"/><circle class="d-coin" cx="838" cy="80" r="5"/><circle class="d-coin" cx="854" cy="80" r="5"/>
+
+          <rect class="d-tier d-tier--on s-blue" x="722" y="158" width="150" height="56"/>
+          <text class="d-t" x="740" y="192" font-weight="600">Premium</text>
+          <circle class="d-coin on" cx="822" cy="186" r="5"/><circle class="d-coin on" cx="838" cy="186" r="5"/><circle class="d-coin" cx="854" cy="186" r="5"/>
+
+          <rect class="d-tier s-purple" x="722" y="264" width="150" height="56"/>
+          <text class="d-t" x="740" y="298">Ultra</text>
+          <circle class="d-coin on" cx="822" cy="292" r="5"/><circle class="d-coin on" cx="838" cy="292" r="5"/><circle class="d-coin on" cx="854" cy="292" r="5"/>
+
+          <text class="d-t13 d-t2" x="953" y="34" text-anchor="middle">Models in each tier</text>
+          <line class="d-faint" x1="872" y1="80" x2="1006" y2="80"/>
+          <line class="d-faint" x1="898" y1="186" x2="1006" y2="186"/>
+          <line class="d-faint" x1="872" y1="292" x2="1006" y2="292"/>
+          <rect class="d-sys" x="900" y="67" width="26" height="26"/><rect class="d-sys" x="940" y="67" width="26" height="26"/><rect class="d-sys" x="980" y="67" width="26" height="26"/>
+          <line class="d-blue-strong" x1="872" y1="186" x2="896" y2="186" marker-end="url(#ahb)"/>
+          <rect class="d-pick" x="900" y="173" width="26" height="26"/><rect class="d-sys" x="940" y="173" width="26" height="26"/><rect class="d-sys" x="980" y="173" width="26" height="26"/>
+          <rect class="d-sys" x="900" y="279" width="26" height="26"/><rect class="d-sys" x="940" y="279" width="26" height="26"/><rect class="d-sys" x="980" y="279" width="26" height="26"/>
+
+          <text class="d-proto" x="900" y="226">5 · STAY</text>
+          <text class="d-t13" x="900" y="243">on this model for</text>
+          <text class="d-t13" x="900" y="259">the rest of the task</text>
+
+          <circle class="d-coin on" cx="727" cy="345" r="5"/>
+          <text class="d-t13 d-t2" x="740" y="350">relative Bobcoin cost</text>
+        </svg>
+      </div>
+      <p class="scroll-hint scroll-hint--router">Scroll sideways to see the whole path, or <a href="assets/infographics/04-one-task-through-the-router.png">open it full size</a>.</p>
+    </div>
+    <figcaption>Illustrative. The task is shown landing in the Premium tier. Switching models mid-task would throw away the prompt cache, which costs both time and money.</figcaption>
+  </figure>
+
+  <section class="wrap prose">
+    <span class="kicker">04 · The vetting</span>
+    <h2>How a model earns its place</h2>
+    <p>A model doesn't get into IBM Bob because it tops a leaderboard. Quality, performance and cost are all gates, and each new model passes through five of them.</p>
+  </section>
+
+  <figure class="figure wide" id="fig-vetting">
+    <div class="figure__card">
+      <p class="figure__label">Figure 5</p>
+      <p class="figure__title">Five gates before a model reaches your team</p>
+      <ol class="journey">
+        <li>
+          <h3>Offline tests</h3>
+          <p>Open benchmarks, plus IBM's own BobBench, organised by tech stack, use case, feature and Premium Package.</p>
+        </li>
+        <li>
+          <h3>Harness tuning</h3>
+          <p>Prompts and the agent harness are tuned for each model, so Bob feels the same whichever model is behind it.</p>
+        </li>
+        <li>
+          <h3>Real-world A/B tests</h3>
+          <p>Randomised tests with internal users. Did the task succeed? How did the model recover from errors and use tools? What did it cost?</p>
+        </li>
+        <li>
+          <h3>Careful rollout</h3>
+          <p>The router adjusts to what the tests show. Changes ship internally before they reach customers.</p>
+        </li>
+        <li>
+          <h3>Human review</h3>
+          <p>An AI ethics committee and a legal review sign off before a model goes live.</p>
+        </li>
+      </ol>
+    </div>
+  </figure>
+
+  <section class="wrap prose">
+    <div class="pull">
+      <p>"Real traffic has the final say."</p>
+      <cite>IBM Bob team, on how the router is tuned</cite>
+    </div>
+
+    <span class="kicker">05 · Why it matters</span>
+    <h2>If you run an engineering team</h2>
+    <ul class="read-it">
+      <li><b>Focus.</b> Developers stop debating models and get on with the work.</li>
+      <li><b>Budget.</b> You plan in Bobcoins, not in token prices that keep moving.</li>
+      <li><b>Evidence.</b> Models are judged on real engineering work, not on vendor claims.</li>
+      <li><b>Review.</b> Every model passes a human check before it reaches your team.</li>
+    </ul>
+
+    <div class="callout">
+      <b>THE HONEST TRADE-OFF</b>
+      All that vetting takes time. The newest model won't appear in Bob the day it launches, and the Bob team says so openly. If your developers want this week's leaderboard winner on day one, they'll be frustrated. For enterprise software, I think that's the right call.
+    </div>
+
+    <div class="closing">
+      <p>Models will keep changing. That's exactly why choosing them shouldn't be your developers' job.</p>
+      <p class="big">Stop managing models. <b>Start managing outcomes.</b></p>
+      <cite>From the IBM Bob launch, April 2026</cite>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="series">
+      <div><span>ALSO IN THIS SERIES</span><a href="https://subramaniamj.github.io/agentic-control-plane/">Stop counting agents</a></div>
+    </div>
+    <h2>Further reading</h2>
+    <ol class="refs">
+      <li><a href="https://bob.ibm.com/blog/how-the-model-router-works/">How the model router works</a><small>IBM Bob blog, November 2026</small></li>
+      <li><a href="https://newsroom.ibm.com/2026-04-28-introducing-ibm-bob-ai-development-partner-that-takes-enterprises-from-ai-assisted-coding-to-production-ready-software">Introducing IBM Bob</a><small>IBM Newsroom, April 2026</small></li>
+      <li><a href="https://newsroom.ibm.com/2026-07-09-ibm-advances-enterprise-ai-software-development-with-multi-agent-capabilities-and-specialized-modernization-workflows">Multi-agent capabilities and modernisation workflows</a><small>IBM Newsroom, July 2026</small></li>
+      <li><a href="https://bob.ibm.com/">IBM Bob</a><small>Product site</small></li>
+    </ol>
+    <p class="fine">Views are my own and do not necessarily represent those of my employer.</p>
+    <p class="fine">Product names mentioned are trademarks of their respective owners.</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById("theme-toggle");
+    var meta = document.querySelector('meta[name="theme-color"]');
+    function sync() {
+      var dark = root.getAttribute("data-theme") === "dark";
+      btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+      if (meta) meta.setAttribute("content", dark ? "#161616" : "#ffffff");
+    }
+    btn.addEventListener("click", function () {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("acp-theme", next); } catch (e) {}
+      sync();
+    });
+    sync();
+
+    var bar = document.getElementById("progress");
+    function onScroll() {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      bar.style.width = (h > 0 ? Math.min(100, (window.scrollY / h) * 100) : 0) + "%";
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>
